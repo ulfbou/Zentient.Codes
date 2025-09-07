@@ -3,8 +3,7 @@
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<RootNamespace>Zentient.Codes.Analyzers</RootNamespace>
 
-		<!-- Force C# 8.0 or later for nullable -->
-		<LangVersion>8.0</LangVersion>
+		<LangVersion>10.0</LangVersion>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
