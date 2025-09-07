@@ -15,12 +15,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        framework: [net8.0, net9.0]
+        sdk: [8.x, 9.x]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -38,24 +38,24 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Solution (${{ matrix.framework }})
-        run: dotnet build --no-restore --configuration Release -f ${{ matrix.framework }}
+      - name: Build Solution
+        run: dotnet build --no-restore --configuration Release
 
-      - name: Run Tests (${{ matrix.framework }})
-        run: dotnet test --no-build --configuration Release -f ${{ matrix.framework }} --logger trx --results-directory TestResults
+      - name: Run Tests
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ matrix.framework }}
+          name: test-results-${{ matrix.sdk }}
           path: TestResults
 
       - name: Report Test Results
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Tests (${{ matrix.framework }})
+          name: Tests (${{ matrix.sdk }})
           path: "TestResults/*.trx"
           reporter: dotnet-trx
 
