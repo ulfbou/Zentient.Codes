@@ -16,6 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         sdk: [8.x, 9.x]
+    permissions:
+      contents: read
+      checks: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,6 +61,7 @@ jobs:
           name: Tests (${{ matrix.sdk }})
           path: "TestResults/*.trx"
           reporter: dotnet-trx
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   pack:
     name: Create Package
