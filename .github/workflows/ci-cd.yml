@@ -1,0 +1,123 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net8.0, net9.0]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.x
+            9.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Solution (${{ matrix.framework }})
+        run: dotnet build --no-restore --configuration Release -f ${{ matrix.framework }}
+
+      - name: Run Tests (${{ matrix.framework }})
+        run: dotnet test --no-build --configuration Release -f ${{ matrix.framework }} --logger trx --results-directory TestResults
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.framework }}
+          path: TestResults
+
+      - name: Report Test Results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Tests (${{ matrix.framework }})
+          path: "TestResults/*.trx"
+          reporter: dotnet-trx
+
+  pack:
+    name: Create Package
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Pack all projects
+        run: dotnet pack --no-restore --configuration Release -o out
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: out/*.nupkg
+
+  publish-staging:
+    name: Publish to GitHub Packages (Staging)
+    runs-on: ubuntu-latest
+    needs: pack
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: out
+
+      - name: Push to GitHub Packages
+        run: dotnet nuget push "out/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+  publish:
+    name: Publish to NuGet
+    runs-on: ubuntu-latest
+    needs: pack
+    if: github.event_name == 'release'
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: out
+
+      - name: Push to NuGet
+        run: dotnet nuget push "out/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
