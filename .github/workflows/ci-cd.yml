@@ -90,16 +90,9 @@ jobs:
       
       - name: Pack
         run: |
-          # Find all project files in the repository
           PROJECTS=$(find . -name "*.csproj")
-          
-          # Loop through each project and pack it with the correct framework
           for PROJECT_PATH in $PROJECTS; do
-            # Extract the project name from the path
-            PROJECT_NAME=$(basename -- "$PROJECT_PATH" .csproj)
-            
-            # Pack the project, specifying the framework from the matrix
-            dotnet pack "$PROJECT_PATH" --no-restore --configuration Release -o out /p:TargetFrameworks=net${{ matrix.sdk }}
+            dotnet pack "$PROJECT_PATH" --no-restore --configuration Release -o out /p:TargetFramework=${{ matrix.sdk }}
           done
 
       - name: Upload NuGet packages
