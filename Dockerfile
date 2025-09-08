@@ -14,13 +14,3 @@ WORKDIR /app
 # Pin the SDK version for deterministic builds by copying the global.json from the host.
 # This ensures consistency and prevents the .NET CLI from selecting a different SDK version.
 COPY global.json .
-
-# Restore dependencies for all projects to pre-populate the NuGet cache.
-# This helps subsequent builds and packs to be faster and more reliable.
-# In your pipeline, you can still run `dotnet restore` but the cache should be warm.
-RUN dotnet new console -o MyProject
-RUN dotnet new classlib -o MyLibrary
-RUN dotnet restore
-
-# Clean up the temporary project files created for cache priming to keep the image lean.
-RUN rm -rf MyProject MyLibrary
