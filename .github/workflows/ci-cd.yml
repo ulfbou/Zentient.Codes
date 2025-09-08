@@ -27,13 +27,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK (matrix)
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+          dotnet-version: |
+            8.x
+            9.x
 
-      - name: Show installed SDK (debug)
+      - name: Show installed SDKs (debug)
         run: dotnet --info
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
         run: dotnet restore
@@ -62,7 +72,6 @@ jobs:
           reporter: dotnet-trx
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-
   pack:
     name: Create Package (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
@@ -79,22 +88,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK (matrix)
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+          dotnet-version: |
+            8.x
+            9.x
 
-      - name: Pin SDK (create global.json for determinism)
-        run: |
-          DOTNET_VER=$(dotnet --version)
-          cat > global.json <<EOF
-          {
-            "sdk": {
-              "version": "$DOTNET_VER"
-            }
-          }
-          EOF
-          echo "global.json created with SDK $DOTNET_VER"
+      - name: Show installed SDKs (debug)
+        run: dotnet --info
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -153,12 +155,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: out
-          pattern: nuget-packages-*
 
-      - name: Setup .NET SDK (publish)
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+          dotnet-version: |
+            8.x
+            9.x
 
       - name: Push to GitHub Packages
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
@@ -173,12 +176,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: out
-          pattern: nuget-packages-*
 
-      - name: Setup .NET SDK (publish)
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+          dotnet-version: |
+            8.x
+            9.x
 
       - name: Push to NuGet
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
