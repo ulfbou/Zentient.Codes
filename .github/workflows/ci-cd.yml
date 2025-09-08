@@ -46,7 +46,9 @@ jobs:
     name: Build & Test (${{ matrix.sdk-and-framework.sdk }})
     runs-on: ubuntu-latest
     needs: build-docker-image
-    container: ghcr.io/${{ github.repository | lower }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
+    env:
+      LOWERCASE_REPO: ${{ github.repository | lower }}
+    container: ghcr.io/${{ env.LOWERCASE_REPO }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +98,9 @@ jobs:
     name: Create Package (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
     needs: [build-and-test, build-docker-image]
-    container: ghcr.io/${{ github.repository | lower }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
+    env:
+      LOWERCASE_REPO: ${{ github.repository | lower }}
+    container: ghcr.io/${{ env.LOWERCASE_REPO }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -152,7 +156,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'push' || github.event_name == 'pull_request'
-    container: ghcr.io/${{ github.repository | lower }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
+    env:
+      LOWERCASE_REPO: ${{ github.repository | lower }}
+    container: ghcr.io/${{ env.LOWERCASE_REPO }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
@@ -167,7 +173,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'release'
-    container: ghcr.io/${{ github.repository | lower }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
+    env:
+      LOWERCASE_REPO: ${{ github.repository | lower }}
+    container: ghcr.io/${{ env.LOWERCASE_REPO }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
