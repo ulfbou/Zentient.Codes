@@ -87,12 +87,20 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Pack all projects
-        run: dotnet pack --no-restore --configuration Release -o out
+      
+      - name: Pack
+        run: |
+          # Find all project files in the repository
+          PROJECTS=$(find . -name "*.csproj")
+          
+          # Loop through each project and pack it with the correct framework
+          for PROJECT_PATH in $PROJECTS; do
+            # Extract the project name from the path
+            PROJECT_NAME=$(basename -- "$PROJECT_PATH" .csproj)
+            
+            # Pack the project, specifying the framework from the matrix
+            dotnet pack "$PROJECT_PATH" --no-restore --configuration Release -o out /p:TargetFrameworks=net${{ matrix.sdk }}
+          done
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
@@ -105,11 +113,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'push' || github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [8.x, 9.x]
     steps:
       - name: Download package artifacts
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages
+          name: nuget-packages-${{ matrix.sdk }}
           path: out
 
       - name: Push to GitHub Packages
@@ -120,6 +132,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'release'
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [8.x, 9.x]
     steps:
       - name: Download package artifacts
         uses: actions/download-artifact@v4
