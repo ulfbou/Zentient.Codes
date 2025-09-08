@@ -9,9 +9,44 @@ on:
     types: [created]
 
 jobs:
+
+  build-docker-image:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   build-and-test:
     name: Build & Test (${{ matrix.sdk-and-framework.sdk }})
     runs-on: ubuntu-latest
+    needs: build-docker-image
+    container: ghcr.io/${{ github.repository }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -27,26 +62,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup all .NET SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.x
-            9.x
-
       - name: Show installed SDKs (debug)
         run: dotnet --info
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
       - name: Restore dependencies for all frameworks
-        run: dotnet restore --property:TargetFrameworks="net8.0;net9.0"
+        run: dotnet restore
 
       - name: Build Solution (target framework)
         run: |
@@ -75,7 +95,8 @@ jobs:
   pack:
     name: Create Package (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [build-and-test, build-docker-image]
+    container: ghcr.io/${{ github.repository }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,23 +109,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup all .NET SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.x
-            9.x
-
       - name: Show installed SDKs (debug)
         run: dotnet --info
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
 
       - name: Restore (for pack)
         run: dotnet restore
@@ -112,19 +118,16 @@ jobs:
       - name: Build and Pack (src only, skip tests)
         run: |
           mkdir -p out
-          # only pack projects in ./src (skip tests and other non-packable projects)
           PROJECTS=$(find ./src -name "*.csproj")
           echo "Projects to consider for pack:"
           echo "$PROJECTS"
 
           for PROJECT_PATH in $PROJECTS; do
-            # Skip test projects by convention
             if [[ "$PROJECT_PATH" == *".Tests."* ]] || [[ "$PROJECT_PATH" == *"/tests/"* ]] || [[ "$PROJECT_PATH" == *"/Test/"* ]]; then
               echo "Skipping test project: $PROJECT_PATH"
               continue
             fi
 
-            # Optionally inspect IsPackable and skip if explicitly false
             IS_PACKABLE=$(dotnet msbuild "$PROJECT_PATH" -nologo -t:GetProperty -p:PropertyName=IsPackable 2>/dev/null | sed -n 's/.*IsPackable: //p' || true)
             if [[ -n "$IS_PACKABLE" && "$IS_PACKABLE" == "false" ]]; then
               echo "Project marked IsPackable=false, skipping: $PROJECT_PATH"
@@ -135,7 +138,6 @@ jobs:
             dotnet build "$PROJECT_PATH" --no-restore --configuration Release --framework ${{ matrix.sdk-and-framework.framework }}
 
             echo "Packing $PROJECT_PATH for target ${{ matrix.sdk-and-framework.framework }}"
-            # Use MSBuild property to specify the target framework to avoid short -f forwarding issues
             dotnet pack "$PROJECT_PATH" --no-restore --no-build --configuration Release -o out --property:TargetFramework=${{ matrix.sdk-and-framework.framework }}
           done
 
@@ -150,18 +152,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'push' || github.event_name == 'pull_request'
+    container: ghcr.io/${{ github.repository }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
         with:
           path: out
-
-      - name: Setup all .NET SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.x
-            9.x
 
       - name: Push to GitHub Packages
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
@@ -171,18 +167,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'release'
+    container: ghcr.io/${{ github.repository }}:${{ needs.build-docker-image.outputs.tag || 'latest' }}
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
         with:
           path: out
-
-      - name: Setup all .NET SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.x
-            9.x
 
       - name: Push to NuGet
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
