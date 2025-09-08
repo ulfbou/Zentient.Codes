@@ -18,6 +18,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub Actions", "GitHub Ac
 		.github\workflows\ci-cd.yml = .github\workflows\ci-cd.yml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution files", "Solution files", "{B616EA50-B355-4E98-9871-88AB61FAD0B8}"
+	ProjectSection(SolutionItems) = preProject
+		Dockerfile = Dockerfile
+		global.json = global.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -72,5 +78,8 @@ Global
 		{60986052-D7B0-40ED-95EB-60A9542C1DDA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E5CE4FD0-311C-4EFC-88A3-73E7287645AF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{DAFF1C23-69FB-427C-9387-B5D3532A383D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FFA6DE12-EC6F-487D-95A6-448056FA86CA}
 	EndGlobalSection
 EndGlobal

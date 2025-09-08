@@ -65,7 +65,7 @@ jobs:
       - name: Show installed SDKs (debug)
         run: dotnet --info
 
-      - name: Restore dependencies for all frameworks
+      - name: Restore dependencies
         run: dotnet restore
 
       - name: Build Solution (target framework)
