@@ -20,17 +20,21 @@ jobs:
             framework: net8.0
           - sdk: 9.x
             framework: net9.0
+
     permissions:
       contents: read
       checks: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK ${{ matrix.sdk-and-framework.sdk }}
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+          dotnet-version: |
+            8.x
+            9.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -65,7 +69,6 @@ jobs:
           reporter: dotnet-trx
           github-token: ${{ secrets.GITHUB_TOKEN }}
   
-  
   pack:
     name: Create Package
     runs-on: ubuntu-latest
@@ -79,10 +82,10 @@ jobs:
           - sdk: 9.x
             framework: net9.0
     steps:
-      - name: Checkout code
+      - name: Checkout code 
         uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ matrix.sdk-and-framework.framework }}
+      - name: Setup .NET SDK ${{ matrix.sdk-and-framework.sdk }} Framework ${{ matrix.sdk-and-framework.framework }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
@@ -144,7 +147,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: out
-          # No name specified, downloads all artifacts from the workflow run
 
       - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
