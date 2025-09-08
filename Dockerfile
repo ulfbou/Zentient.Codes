@@ -2,7 +2,7 @@
 # The 'mcr.microsoft.com/dotnet/sdk:9.0-jammy' image is a lean, secure, and stable base
 # for building .NET applications. It includes the 9.0 SDK, which is backward-compatible and can
 # restore projects targeting earlier frameworks like net8.0.
-FROM mcr.microsoft.com/dotnet/sdk:9.0-jammy
+FROM mcr.microsoft.com/dotnet/sdk:9.0
 
 # Create a non-root user for security best practices.
 # The 'app' user is the standard for .NET chiseled images.
