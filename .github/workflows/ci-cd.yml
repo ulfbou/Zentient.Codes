@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Build & Test
+    name: Build & Test (${{ matrix.sdk-and-framework.sdk }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,29 +27,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup all .NET SDKs
+      - name: Setup .NET SDK (matrix)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.x
-            9.x
+          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+      - name: Show installed SDK (debug)
+        run: dotnet --info
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Solution
-        run: dotnet build --no-restore --configuration Release
+      - name: Build Solution (target framework)
+        run: |
+          dotnet build ./Zentient.Codes.sln --no-restore --configuration Release --framework ${{ matrix.sdk-and-framework.framework }}
 
-      - name: Run Tests
-        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+      - name: Run Tests (target framework)
+        run: |
+          dotnet test ./Zentient.Codes.sln --no-build --configuration Release --framework ${{ matrix.sdk-and-framework.framework }} --logger trx --results-directory TestResults
 
       - name: Upload Test Results for ${{ matrix.sdk-and-framework.sdk }}
         uses: actions/upload-artifact@v4
@@ -67,8 +62,9 @@ jobs:
           reporter: dotnet-trx
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+
   pack:
-    name: Create Package
+    name: Create Package (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
     needs: build-and-test
     strategy:
@@ -80,15 +76,25 @@ jobs:
           - sdk: 9.x
             framework: net9.0
     steps:
-      - name: Checkout code 
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup all .NET SDKs
+      - name: Setup .NET SDK (matrix)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.x
-            9.x
+          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
+
+      - name: Pin SDK (create global.json for determinism)
+        run: |
+          DOTNET_VER=$(dotnet --version)
+          cat > global.json <<EOF
+          {
+            "sdk": {
+              "version": "$DOTNET_VER"
+            }
+          }
+          EOF
+          echo "global.json created with SDK $DOTNET_VER"
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -97,18 +103,38 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
-      
-      - name: Build and Pack for ${{ matrix.sdk-and-framework.framework }}
+
+      - name: Restore (for pack)
+        run: dotnet restore
+
+      - name: Build and Pack (src only, skip tests)
         run: |
-          dotnet restore
-          PROJECTS=$(find . -name "*.csproj")
-          
+          mkdir -p out
+          # only pack projects in ./src (skip tests and other non-packable projects)
+          PROJECTS=$(find ./src -name "*.csproj")
+          echo "Projects to consider for pack:"
+          echo "$PROJECTS"
+
           for PROJECT_PATH in $PROJECTS; do
-            # Build for the specific target framework
-            dotnet build "$PROJECT_PATH" --no-restore --configuration Release -f ${{ matrix.sdk-and-framework.framework }}
-            
-            # Pack for the specific target framework
-            dotnet pack "$PROJECT_PATH" --no-restore --no-build --configuration Release -o out -f ${{ matrix.sdk-and-framework.framework }}
+            # Skip test projects by convention
+            if [[ "$PROJECT_PATH" == *".Tests."* ]] || [[ "$PROJECT_PATH" == *"/tests/"* ]] || [[ "$PROJECT_PATH" == *"/Test/"* ]]; then
+              echo "Skipping test project: $PROJECT_PATH"
+              continue
+            fi
+
+            # Optionally inspect IsPackable and skip if explicitly false
+            IS_PACKABLE=$(dotnet msbuild "$PROJECT_PATH" -nologo -t:GetProperty -p:PropertyName=IsPackable 2>/dev/null | sed -n 's/.*IsPackable: //p' || true)
+            if [[ -n "$IS_PACKABLE" && "$IS_PACKABLE" == "false" ]]; then
+              echo "Project marked IsPackable=false, skipping: $PROJECT_PATH"
+              continue
+            fi
+
+            echo "Building $PROJECT_PATH for ${{ matrix.sdk-and-framework.framework }}"
+            dotnet build "$PROJECT_PATH" --no-restore --configuration Release --framework ${{ matrix.sdk-and-framework.framework }}
+
+            echo "Packing $PROJECT_PATH for target ${{ matrix.sdk-and-framework.framework }}"
+            # Use MSBuild property to specify the target framework to avoid short -f forwarding issues
+            dotnet pack "$PROJECT_PATH" --no-restore --no-build --configuration Release -o out --property:TargetFramework=${{ matrix.sdk-and-framework.framework }}
           done
 
       - name: Upload NuGet packages
@@ -129,12 +155,10 @@ jobs:
           path: out
           pattern: nuget-packages-*
 
-      - name: Setup all .NET SDKs
+      - name: Setup .NET SDK (publish)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.x
-            9.x
+          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
 
       - name: Push to GitHub Packages
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
@@ -151,12 +175,10 @@ jobs:
           path: out
           pattern: nuget-packages-*
 
-      - name: Setup all .NET SDKs
+      - name: Setup .NET SDK (publish)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.x
-            9.x
+          dotnet-version: ${{ matrix.sdk-and-framework.sdk }}
 
       - name: Push to NuGet
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
