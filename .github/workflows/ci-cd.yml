@@ -45,8 +45,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Restore dependencies for all frameworks
+        run: dotnet restore --property:TargetFrameworks="net8.0;net9.0"
 
       - name: Build Solution (target framework)
         run: |
