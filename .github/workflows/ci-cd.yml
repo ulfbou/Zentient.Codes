@@ -20,16 +20,14 @@ jobs:
             framework: net8.0
           - sdk: 9.x
             framework: net9.0
-
     permissions:
       contents: read
       checks: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDKs
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -68,7 +66,7 @@ jobs:
           path: "TestResults/*.trx"
           reporter: dotnet-trx
           github-token: ${{ secrets.GITHUB_TOKEN }}
-  
+
   pack:
     name: Create Package
     runs-on: ubuntu-latest
@@ -85,7 +83,7 @@ jobs:
       - name: Checkout code 
         uses: actions/checkout@v4
 
-      - name: Setup all .NET SDK
+      - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -100,14 +98,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
       
-      - name: Restore dependencies with ${{ matrix.sdk-and-framework.framework }}
-        run: dotnet restore
-      
-      - name: Pack
+      - name: Build and Pack for ${{ matrix.sdk-and-framework.framework }}
         run: |
+          dotnet restore
           PROJECTS=$(find . -name "*.csproj")
+          
           for PROJECT_PATH in $PROJECTS; do
-            dotnet pack "$PROJECT_PATH" --no-restore --configuration Release -o out /p:TargetFramework=${{ matrix.sdk-and-framework.framework }}
+            # Build for the specific target framework
+            dotnet build "$PROJECT_PATH" --no-restore --configuration Release -f ${{ matrix.sdk-and-framework.framework }}
+            
+            # Pack for the specific target framework
+            dotnet pack "$PROJECT_PATH" --no-restore --no-build --configuration Release -o out -f ${{ matrix.sdk-and-framework.framework }}
           done
 
       - name: Upload NuGet packages
@@ -115,8 +116,7 @@ jobs:
         with:
           name: nuget-packages-${{ matrix.sdk-and-framework.framework }}
           path: out/*.nupkg
-  
-  
+
   publish-staging:
     name: Publish to GitHub Packages (Staging)
     runs-on: ubuntu-latest
@@ -127,6 +127,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: out
+          pattern: nuget-packages-*
 
       - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
@@ -137,8 +138,7 @@ jobs:
 
       - name: Push to GitHub Packages
         run: dotnet nuget push "out/**/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-  
-  
+
   publish:
     name: Publish to NuGet
     runs-on: ubuntu-latest
@@ -149,6 +149,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: out
+          pattern: nuget-packages-*
 
       - name: Setup all .NET SDKs
         uses: actions/setup-dotnet@v4
