@@ -9,6 +9,9 @@ on:
     types: [created]
 
 jobs:
+  # ------------------
+  # 1. Build & Push Docker Image
+  # ------------------
   build-docker-image:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
@@ -31,7 +34,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=semver,pattern={{version}}
-
+      
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -43,11 +46,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ------------------
+  # 2. Build & Test
+  # ------------------
   build-and-test:
     name: Build & Test (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
     needs: build-docker-image
-    container: ghcr.io/${{ github.repository | lowercase }}:latest
+    container: ghcr.io/${{ lowercase(github.repository) }}:latest
     strategy:
       fail-fast: false
       matrix:
@@ -90,11 +96,14 @@ jobs:
           reporter: dotnet-trx
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  # ------------------
+  # 3. Pack
+  # ------------------
   pack:
     name: Create Package
     runs-on: ubuntu-latest
     needs: build-and-test
-    container: ghcr.io/${{ github.repository | lowercase }}:latest
+    container: ghcr.io/${{ lowercase(github.repository) }}:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,12 +117,15 @@ jobs:
           name: nuget-packages
           path: out/*.nupkg
 
+  # ------------------
+  # 4. Publish
+  # ------------------
   publish:
     name: Publish to NuGet
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'release'
-    container: ghcr.io/${{ github.repository | lowercase }}:latest
+    container: ghcr.io/${{ lowercase(github.repository) }}:latest
     steps:
       - name: Download package artifacts
         uses: actions/download-artifact@v4
