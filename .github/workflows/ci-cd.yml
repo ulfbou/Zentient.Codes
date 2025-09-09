@@ -8,43 +8,54 @@ on:
   release:
     types: [created]
 
+env:
+  # Placeholder, actual lowercase value will be set in build-docker-image and passed as output
+  REPO_LC: ''
+
 jobs:
   # ------------------
   # 1. Build & Push Docker Image
   # ------------------
   build-docker-image:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      name: Build & Push Docker Image
+      runs-on: ubuntu-latest
+      outputs:
+        repo_lc: ${{ steps.lowercase-repo.outputs.repo_lc }}
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        - name: Set lowercase repo name
+          id: lowercase-repo
+          run: echo "repo_lc=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Extract image metadata (tags and labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=latest
-            type=semver,pattern={{version}}
+        - name: Log in to GitHub Container Registry
+          uses: docker/login-action@v3
+          with:
+            registry: ghcr.io
+            username: ${{ github.actor }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Extract image metadata (tags and labels)
+          id: meta
+          uses: docker/metadata-action@v5
+          with:
+            images: ghcr.io/${{ github.repository }}
+            tags: |
+              type=raw,value=latest
+              type=semver,pattern={{version}}
       
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        - name: Build and push Docker image
+          uses: docker/build-push-action@v5
+          with:
+            context: .
+            file: ./Dockerfile
+            push: true
+            tags: ${{ steps.meta.outputs.tags }}
+            labels: ${{ steps.meta.outputs.labels }}
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+
 
   # ------------------
   # 2. Build & Test
@@ -53,7 +64,7 @@ jobs:
     name: Build & Test (${{ matrix.sdk-and-framework.framework }})
     runs-on: ubuntu-latest
     needs: build-docker-image
-    container: ghcr.io/${{ lowercase(github.repository) }}:latest
+    container: ghcr.io/${{ needs.build-docker-image.outputs.repo_lc }}:latest
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +79,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      
       - name: Restore dependencies
         run: dotnet restore
 
@@ -103,14 +114,12 @@ jobs:
     name: Create Package
     runs-on: ubuntu-latest
     needs: build-and-test
-    container: ghcr.io/${{ lowercase(github.repository) }}:latest
+    container: ghcr.io/${{ needs.build-docker-image.outputs.repo_lc }}:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Pack all projects
         run: dotnet pack ./Zentient.Codes.sln --no-restore --no-build --configuration Release -o out
-
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
         with:
@@ -125,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: pack
     if: github.event_name == 'release'
-    container: ghcr.io/${{ lowercase(github.repository) }}:latest
+    container: ghcr.io/${{ needs.build-docker-image.outputs.repo_lc }}:latest
     steps:
       - name: Download package artifacts
         uses: actions/download-artifact@v4
